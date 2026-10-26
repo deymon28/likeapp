@@ -3,4 +3,6 @@
     <string name="app_name">YT Like</string>
     <string name="tile_label">Лайк трека</string>
     <string name="channel_name">Кнопка лайка</string>
+    <string name="volume_service_label">YT Like: лайк кнопкой громкости</string>
+    <string name="volume_service_description">Долгое нажатие «громкость −», пока открыт YouTube Music, ставит лайк (или дизлайк) текущему треку и не меняет громкость. Короткое нажатие убавляет громкость как обычно. Приложение видит только кнопку «громкость −».</string>
 </resources>

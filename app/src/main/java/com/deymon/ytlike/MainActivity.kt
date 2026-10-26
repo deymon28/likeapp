@@ -16,6 +16,8 @@ import android.service.notification.NotificationListenerService
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -90,6 +92,45 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33) {
             button("Добавить плитку «Лайк» в шторку") { requestTile() }
         }
+
+        heading("Кнопка «громкость −»")
+        val volumeEnabled = VolumeKeyService.isEnabled(this)
+        text("Спецвозможность: " + if (volumeEnabled) "✅" else "❌")
+        text(
+            "Долгое нажатие «громкость −» (полсекунды), пока открыт YouTube Music, — действие ниже, " +
+                "громкость при этом не меняется. Короткое нажатие убавляет громкость как обычно. " +
+                "Работает при включённом экране, в том числе заблокированном.\n" +
+                "Вибрация: одна короткая — готово, две — лайк снят, одна длинная — ошибка.",
+            small = true,
+        )
+        if (!volumeEnabled) {
+            text(
+                "Если переключатель в спецвозможностях неактивен: Настройки приложения → ⋮ → " +
+                    "«Разрешить ограниченные настройки», потом снова сюда.",
+                small = true,
+            )
+            button("Включить в спецвозможностях") {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+        }
+        val volumeAction = Like.prefs(this)
+            .getString(VolumeKeyService.KEY_VOLUME_ACTION, VolumeKeyService.ACTION_LIKE)
+        root.addView(RadioGroup(this).apply {
+            for ((value, label) in listOf(
+                VolumeKeyService.ACTION_LIKE to "👍 Лайк",
+                VolumeKeyService.ACTION_DISLIKE to "👎 Дизлайк",
+                VolumeKeyService.ACTION_OFF to "Выключено",
+            )) {
+                addView(RadioButton(context).apply {
+                    id = View.generateViewId()
+                    text = label
+                    isChecked = value == volumeAction
+                    setOnClickListener {
+                        Like.prefs(context).edit().putString(VolumeKeyService.KEY_VOLUME_ACTION, value).apply()
+                    }
+                })
+            }
+        })
 
         heading("Xiaomi / HyperOS")
         text(

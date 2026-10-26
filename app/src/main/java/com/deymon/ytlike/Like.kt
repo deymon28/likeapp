@@ -20,6 +20,7 @@ import android.util.Log
  *  1. PlaybackState custom action (what the stock Android media player draws as the thumb button).
  *  2. Action button of YT Music's own notification (we are a notification listener, so we can press it).
  *  3. MediaSession rating (thumb up), if the session supports it.
+ * Dislike works the same way with the thumbs down button.
  */
 object Like {
     const val YT_MUSIC = "com.google.android.apps.youtube.music"
@@ -33,7 +34,11 @@ object Like {
     private val NEGATIVE = listOf("dislike", "thumbs_down", "thumb_down", "thumbsdown", "не нрав", "дизлайк")
     private val POSITIVE = listOf("like", "thumbs_up", "thumb_up", "thumbsup", "нрав", "лайк")
 
-    data class Result(val ok: Boolean, val message: String)
+    // YT Music renames the button once the track is liked ("Undo like").
+    private val UNDO = listOf("undo", "remove", "unlike", "убрать", "отмен")
+
+    /** [undo] is true when the press removed an existing like/dislike instead of adding one. */
+    data class Result(val ok: Boolean, val message: String, val undo: Boolean = false)
 
     fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences("ytlike", Context.MODE_PRIVATE)
@@ -48,6 +53,16 @@ object Like {
         val text = texts.filterNotNull().joinToString(" ").lowercase()
         if (NEGATIVE.any { it in text }) return false
         return POSITIVE.any { it in text }
+    }
+
+    fun looksLikeDislike(vararg texts: CharSequence?): Boolean {
+        val text = texts.filterNotNull().joinToString(" ").lowercase()
+        return NEGATIVE.any { it in text }
+    }
+
+    private fun isUndo(label: CharSequence?): Boolean {
+        val text = label?.toString()?.lowercase() ?: return false
+        return UNDO.any { it in text }
     }
 
     fun controllers(context: Context): List<MediaController> = try {
@@ -108,35 +123,64 @@ object Like {
         return actions.firstOrNull { looksLikeLike(it.title) }
     }
 
-    fun like(context: Context): Result {
+    fun like(context: Context): Result = press(
+        context,
+        emoji = "👍",
+        customAction = { findCustomAction(context, it) },
+        notificationAction = { findNotificationAction(context, it) },
+        thumbUp = true,
+        notFound = "Кнопка лайка не найдена — открой YT Like и выбери её вручную",
+    )
+
+    fun dislike(context: Context): Result = press(
+        context,
+        emoji = "👎",
+        customAction = { controller ->
+            customActions(controller).firstOrNull { looksLikeDislike(it.action, it.name) }
+        },
+        notificationAction = { packageName ->
+            notificationActions(packageName).firstOrNull { looksLikeDislike(it.title) }
+        },
+        thumbUp = false,
+        notFound = "Кнопка дизлайка не найдена",
+    )
+
+    private fun press(
+        context: Context,
+        emoji: String,
+        customAction: (MediaController) -> PlaybackState.CustomAction?,
+        notificationAction: (String) -> Notification.Action?,
+        thumbUp: Boolean,
+        notFound: String,
+    ): Result {
         if (!hasAccess(context)) return Result(false, "Нет доступа к уведомлениям — открой YT Like")
         val controller = target(context) ?: return Result(false, "YouTube Music сейчас не играет")
         val track = title(controller)
 
-        findCustomAction(context, controller)?.let { action ->
+        customAction(controller)?.let { action ->
             controller.transportControls.sendCustomAction(action, action.extras)
             Log.i(TAG, "custom action ${action.action} (${action.name}) -> $track")
-            return Result(true, "👍 ${action.name}: $track")
+            return Result(true, "$emoji ${action.name}: $track", isUndo(action.name))
         }
 
-        findNotificationAction(context, controller.packageName)?.let { action ->
+        notificationAction(controller.packageName)?.let { action ->
             try {
                 action.actionIntent.send()
                 Log.i(TAG, "notification action ${action.title} -> $track")
-                return Result(true, "👍 ${action.title}: $track")
+                return Result(true, "$emoji ${action.title}: $track", isUndo(action.title))
             } catch (e: PendingIntent.CanceledException) {
                 Log.w(TAG, "notification action cancelled", e)
             }
         }
 
         if (controller.ratingType == Rating.RATING_THUMB_UP_DOWN) {
-            controller.transportControls.setRating(Rating.newThumbRating(true))
-            Log.i(TAG, "thumb rating -> $track")
-            return Result(true, "👍 $track")
+            controller.transportControls.setRating(Rating.newThumbRating(thumbUp))
+            Log.i(TAG, "thumb rating $thumbUp -> $track")
+            return Result(true, "$emoji $track")
         }
 
-        Log.w(TAG, "like action not found:\n" + describe(context))
-        return Result(false, "Кнопка лайка не найдена — открой YT Like и выбери её вручную")
+        Log.w(TAG, "$emoji action not found:\n" + describe(context))
+        return Result(false, notFound)
     }
 
     /** Text dump of every session and its actions, for logcat and the main screen. */
