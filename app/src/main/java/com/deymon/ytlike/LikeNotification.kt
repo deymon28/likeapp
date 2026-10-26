@@ -60,6 +60,27 @@ object LikeNotification {
             ?.takeIf { it.isNotBlank() } ?: "Нравится")
         val likeIntent = LikeReceiver.pendingIntent(context)
 
+        val contentIntent = context.packageManager.getLaunchIntentForPackage(controller.packageName)
+            ?.let { PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE) }
+
+        // HyperOS hides notification content on a locked screen and shows the public version
+        // instead (by default just the app name), so the public version carries the button too.
+        val publicVersion = builder(context, title, artist, label, likeIntent, contentIntent).build()
+        val notification = builder(context, title, artist, label, likeIntent, contentIntent)
+            .setPublicVersion(publicVersion)
+            .build()
+
+        manager(context).notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun builder(
+        context: Context,
+        title: String,
+        artist: String,
+        label: String,
+        likeIntent: PendingIntent,
+        contentIntent: PendingIntent?,
+    ): Notification.Builder {
         val views = RemoteViews(context.packageName, R.layout.notification_like).apply {
             setTextViewText(R.id.title, title)
             setTextViewText(R.id.artist, artist)
@@ -67,7 +88,7 @@ object LikeNotification {
             setOnClickPendingIntent(R.id.like_button, likeIntent)
         }
 
-        val builder = Notification.Builder(context, CHANNEL_ID)
+        return Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_thumb_up)
             .setContentTitle(title)
             .setContentText(artist)
@@ -84,14 +105,7 @@ object LikeNotification {
             .setShowWhen(false)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setCategory(Notification.CATEGORY_STATUS)
-
-        context.packageManager.getLaunchIntentForPackage(controller.packageName)?.let { launch ->
-            builder.setContentIntent(
-                PendingIntent.getActivity(context, 0, launch, PendingIntent.FLAG_IMMUTABLE)
-            )
-        }
-
-        manager(context).notify(NOTIFICATION_ID, builder.build())
+            .setContentIntent(contentIntent)
     }
 
     private fun manager(context: Context) = context.getSystemService(NotificationManager::class.java)!!
