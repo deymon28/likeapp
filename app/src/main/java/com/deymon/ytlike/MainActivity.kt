@@ -80,6 +80,13 @@ class MainActivity : Activity() {
             }
         })
 
+        text(
+            "Если на заблокированном экране видно только «YT Like»: открой настройки канала " +
+                "и в «На экране блокировки» выбери показ содержимого.",
+            small = true,
+        )
+        button("Показ на экране блокировки") { openChannelSettings() }
+
         if (Build.VERSION.SDK_INT >= 33) {
             button("Добавить плитку «Лайк» в шторку") { requestTile() }
         }
@@ -164,6 +171,18 @@ class MainActivity : Activity() {
             Icon.createWithResource(this, R.drawable.ic_thumb_up),
             mainExecutor,
         ) { }
+    }
+
+    // Apps can't set a channel's lock screen visibility themselves, only the user can.
+    private fun openChannelSettings() {
+        val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, LikeNotification.CHANNEL_ID)
+        try {
+            startActivity(intent)
+        } catch (e: RuntimeException) {
+            openAppDetails()
+        }
     }
 
     private fun openAutostart() {

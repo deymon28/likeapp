@@ -15,7 +15,7 @@ import android.widget.RemoteViews
 
 /** Silent ongoing notification with a big "like" button, visible on the lock screen. */
 object LikeNotification {
-    private const val CHANNEL_ID = "like_button"
+    const val CHANNEL_ID = "like_button"
     private const val NOTIFICATION_ID = 1
 
     private val INACTIVE_STATES = setOf(
